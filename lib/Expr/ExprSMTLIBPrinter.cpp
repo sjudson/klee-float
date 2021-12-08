@@ -134,24 +134,24 @@ void ExprSMTLIBPrinter::printConstant(const ref<ConstantExpr> &e, ExprSMTLIBPrin
   // special case to print FP constants
   if (c == SORT_FP) {
     e->toString(value, 10);
-
-    std::string delimit = "E+";
+  
+   std::string delimit = "E+";
     if (value.find(delimit) == std::string::npos) {
       unsigned long long i = std::strtoull(value.c_str(), NULL, 10);
       double d;
-
+  
       memcpy(&d, &i, sizeof( &d ));
-
+  
       // taken from ./Expr.cpp
       llvm::APFloat asF(d);
       llvm::SmallVector<char, 16> result;
       asF.toString(result, /*FormatPrecision=*/0, /*FormatMaxPadding=*/0);
       value = std::string(result.begin(), result.end());
     }
-
+  
     *p << "((_ to_fp 11 53) RNE " << value.substr(0, value.find(delimit)) << " " << value.substr(value.find(delimit) + 2) << ")";
     return;
-  }
+   }
 
   switch (cdm) {
   case BINARY:
@@ -520,13 +520,13 @@ const char *ExprSMTLIBPrinter::getSMTLIBKeyword(const ref<Expr> &e) {
     return "fp.geq";
 
   case Expr::FAdd:
-    return "fp.add";
+    return "fp.add RNE";
   case Expr::FSub:
-    return "fp.sub";
+    return "fp.sub RNE";
   case Expr::FMul:
-    return "fp.mul";
+    return "fp.mul RNE";
   case Expr::FDiv:
-    return "fp.div";
+    return "fp.div RNE";
 
   case Expr::IsNaN:
     return "fp.isNaN";
@@ -537,9 +537,9 @@ const char *ExprSMTLIBPrinter::getSMTLIBKeyword(const ref<Expr> &e) {
   case Expr::IsSubnormal:
     return "fp.isSubnormal";
   case Expr::FSqrt:
-    return "fp.sqrt";
+    return "fp.sqrt RNE";
   case Expr::FAbs:
-    return "fp.abs";
+    return "fp.abs RNE";
 
   default:
     llvm_unreachable("Conversion from Expr to SMTLIB keyword failed");
@@ -615,10 +615,10 @@ void ExprSMTLIBPrinter::printSetLogic() {
   *o << "(set-logic ";
   switch (logicToUse) {
   case QF_ABV:
-    *o << "QF_FPABV";
+    *o << "ALL";
     break;
   case QF_AUFBV:
-    *o << "QF_FPABV";
+    *o << "ALL";
     break;
   }
   *o << " )\n";
@@ -1061,9 +1061,14 @@ void ExprSMTLIBPrinter::printCastToSort(const ref<Expr> &e,
   switch (sort) {
   case SORT_FP: {
     if (e->getKind() == SORT_BITVECTOR) {
-      *p << "((_ to_fp 11 53) RNE ";
+      // if the internal expression is a constant we'll let the constSort take care of it so we can skip the cast
+      if ( e->getKind() != Expr::Constant ) *p << "((_ to_fp 11 53) RNE ";
       printExpression(e, SORT_BITVECTOR, constSort);
-      *p << ")";
+      if ( e->getKind() != Expr::Constant ) *p << ")";
+
+      //*p << "((_ to_fp 11 53) RNE ";
+      //printExpression(e, SORT_BITVECTOR, constSort);
+      //*p << ")";
     } else { // SORT_BOOL
       llvm_unreachable("Unsupported cast");
     }
