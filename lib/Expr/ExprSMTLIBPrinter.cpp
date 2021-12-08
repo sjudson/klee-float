@@ -9,6 +9,10 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "klee/Solver.h"
+#include "klee/SolverImpl.h"
+#include "../Solver/Z3Builder.h"
+#include "FindArrayAckermannizationVisitor.h"
 #include "klee/util/ExprSMTLIBPrinter.h"
 #include "klee/util/APFloatEval.h"
 
@@ -75,9 +79,93 @@ void ExprSMTLIBPrinter::setOutput(llvm::raw_ostream &output) {
 }
 
 void ExprSMTLIBPrinter::setQuery(const Query &q) {
-  query = &q;
+
+  /************************************************************************************************
+   * EXPLANATION                                                                                  *
+   *                                                                                              *
+   * The modifications to the printer in this file successfully output a smt2 query in QF_ABVFP.  *
+   *                                                                                              *
+   * Unfortunately, that query appears very very difficult since it is making statements about    *
+   * floating-point arithmetic over the (casted) output of uninterpreted functions (the arrays).  *
+   *                                                                                              *
+   * Of course, there has to be some solution to this problem otherwise Klee-Float wouldn't work. *
+   *                                                                                              *
+   * That solution is to apply an Ackermann reduction to the arrays to turn them into bitvectors, *
+   * which makes everything tractable. However, the code to do that in the Z3Solver works on the  *
+   * AST, not on the query object, so we can't apply it to the query here first and then let the  *
+   * printer do its work.                                                                         *
+   *                                                                                              *
+   * Luckily, z3 has its own builtin printer. So we just replicate (lit. copy-paste) the query    *
+   * builder code, apply the ackermannization transformation, and call the printer.               *
+   *                                                                                              *
+   ************************************************************************************************/
+
+  Z3Builder *builder = new Z3Builder(/*autoClearConstructCache=*/false);
+  Z3_params solverParameters;
+
+  Z3_solver theSolver = Z3_mk_solver(builder->ctx);
+  Z3_solver_inc_ref(builder->ctx, theSolver);
+  Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
+
+ std::map<const ArrayAckermannizationInfo*,Z3ASTHandle> arrayReplacements;
+  FindArrayAckermannizationVisitor faav(/*recursive=*/false);
+
+  for (ConstraintManager::const_iterator it = q.constraints.begin(),
+                                         ie = q.constraints.end();
+       it != ie; ++it) {
+    faav.visit(*it);
+  }
+  faav.visit(q.expr);
+  for (FindArrayAckermannizationVisitor::ArrayToAckermannizationInfoMapTy::
+           const_iterator aaii = faav.ackermannizationInfo.begin(),
+                          aaie = faav.ackermannizationInfo.end();
+       aaii != aaie; ++aaii) {
+    const std::vector<ArrayAckermannizationInfo> &replacements = aaii->second;
+    for (std::vector<ArrayAckermannizationInfo>::const_iterator
+             i = replacements.begin(),
+             ie = replacements.end();
+         i != ie; ++i) {
+      // Taking a pointer like this is dangerous. If the std::vector<> gets
+      // resized the data might be invalidated.
+      const ArrayAckermannizationInfo *aaInfo = &(*i); // Safe?
+      // Replace with variable
+      std::string str;
+      llvm::raw_string_ostream os(str);
+      os << aaInfo->getArray()->name << "_ackermann";
+      assert(aaInfo->toReplace.size() > 0);
+      Z3ASTHandle replacementVar;
+      for (ExprHashSet::const_iterator ei = aaInfo->toReplace.begin(),
+                                       ee = aaInfo->toReplace.end();
+           ei != ee; ++ei) {
+        ref<Expr> toReplace = *ei;
+        if (replacementVar.isNull()) {
+          replacementVar = builder->getFreshBitVectorVariable(
+              toReplace->getWidth(), os.str().c_str());
+        }
+        bool success = builder->addReplacementExpr(toReplace, replacementVar);
+        assert(success && "Failed to add replacement variable");
+      }
+      arrayReplacements[aaInfo] = replacementVar;
+    }
+  }
+
+  for (ConstraintManager::const_iterator it = q.constraints.begin(),
+                                         ie = q.constraints.end();
+       it != ie; ++it) {
+    Z3_solver_assert(builder->ctx, theSolver, builder->construct(*it));
+  }
+
+  Z3ASTHandle z3QueryExpr =
+    Z3ASTHandle(builder->construct(q.expr), builder->ctx);
+
+  *p << "(set-logic ALL)\n";
+  *p << Z3_solver_to_string(builder->ctx, theSolver);
+  *p << "(check-sat)\n";
+  *p << "(reset)\n";
+
+  //query = &q;
   reset(); // clear the data structures
-  scanAll();
+  //scanAll();
 }
 
 void ExprSMTLIBPrinter::reset() {
@@ -134,21 +222,21 @@ void ExprSMTLIBPrinter::printConstant(const ref<ConstantExpr> &e, ExprSMTLIBPrin
   // special case to print FP constants
   if (c == SORT_FP) {
     e->toString(value, 10);
-  
+
    std::string delimit = "E+";
     if (value.find(delimit) == std::string::npos) {
       unsigned long long i = std::strtoull(value.c_str(), NULL, 10);
       double d;
-  
+
       memcpy(&d, &i, sizeof( &d ));
-  
+
       // taken from ./Expr.cpp
       llvm::APFloat asF(d);
       llvm::SmallVector<char, 16> result;
       asF.toString(result, /*FormatPrecision=*/0, /*FormatMaxPadding=*/0);
       value = std::string(result.begin(), result.end());
     }
-  
+
     *p << "((_ to_fp 11 53) RNE " << value.substr(0, value.find(delimit)) << " " << value.substr(value.find(delimit) + 2) << ")";
     return;
    }
