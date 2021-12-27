@@ -108,10 +108,6 @@ class Z3Builder {
   ExprHashMap<std::pair<Z3ASTHandle, unsigned> > constructed;
   Z3ArrayExprHash _arr_hash;
   ExprHashMap<Z3ASTHandle> replaceWithExpr;
-  // These are additional constraints that are generated during the
-  // translation to Z3's constraint language. Clients should assert
-  // these.
-  std::vector<Z3ASTHandle> sideConstraints;
 
 private:
   Z3ASTHandle bvOne(unsigned width);
@@ -187,6 +183,10 @@ private:
 
 public:
   Z3_context ctx;
+  // These are additional constraints that are generated during the
+  // translation to Z3's constraint language. Clients should assert
+  // these.
+  std::vector<Z3ASTHandle> sideConstraints;
 
   Z3Builder(bool autoClearConstructCache = true);
   ~Z3Builder();

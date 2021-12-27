@@ -107,7 +107,7 @@ void ExprSMTLIBPrinter::setQuery(const Query &q) {
   Z3_solver_inc_ref(builder->ctx, theSolver);
   Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
 
- std::map<const ArrayAckermannizationInfo*,Z3ASTHandle> arrayReplacements;
+  std::map<const ArrayAckermannizationInfo*,Z3ASTHandle> arrayReplacements;
   FindArrayAckermannizationVisitor faav(/*recursive=*/false);
 
   for (ConstraintManager::const_iterator it = q.constraints.begin(),
@@ -157,6 +157,13 @@ void ExprSMTLIBPrinter::setQuery(const Query &q) {
 
   Z3ASTHandle z3QueryExpr =
     Z3ASTHandle(builder->construct(q.expr), builder->ctx);
+
+  for (std::vector<Z3ASTHandle>::iterator it = builder->sideConstraints.begin(),
+                                          ie = builder->sideConstraints.end();
+       it != ie; ++it) {
+    Z3ASTHandle sideConstraint = *it;
+    Z3_solver_assert(builder->ctx, theSolver, sideConstraint);
+  }
 
   *p << "(set-logic ALL)\n";
   *p << Z3_solver_to_string(builder->ctx, theSolver);
@@ -678,8 +685,8 @@ void ExprSMTLIBPrinter::scanAll() {
 
 void ExprSMTLIBPrinter::generateOutput() {
   if (p == NULL || query == NULL || o == NULL) {
-    llvm::errs() << "ExprSMTLIBPrinter::generateOutput() Can't print SMTLIBv2. "
-                    "Output or query bad!\n";
+    //llvm::errs() << "ExprSMTLIBPrinter::generateOutput() Can't print SMTLIBv2. "
+    //                "Output or query bad!\n";
     return;
   }
 
