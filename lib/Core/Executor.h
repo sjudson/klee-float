@@ -324,7 +324,7 @@ private:
   /// function is a wrapper around the state's addConstraint function
   /// which also manages propagation of implied values,
   /// validity checks, and seed patching.
-  void addConstraint(ExecutionState &state, ref<Expr> condition);
+  void addConstraint(ExecutionState &state, ref<Expr> condition, bool extra = 0);
 
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.
