@@ -231,6 +231,21 @@ bool ExecutionState::merge(const ExecutionState &b) {
   std::set_difference(bConstraints.begin(), bConstraints.end(),
                       commonConstraints.begin(), commonConstraints.end(),
                       std::inserter(bSuffix, bSuffix.end()));
+
+  std::set< ref<Expr> > aExtraConstraints(extraConstraints.begin(), extraConstraints.end());
+  std::set< ref<Expr> > bExtraConstraints(b.extraConstraints.begin(),
+                                     b.extraConstraints.end());
+  std::set< ref<Expr> > commonExtraConstraints, aExtraSuffix, bExtraSuffix;
+  std::set_intersection(aExtraConstraints.begin(), aExtraConstraints.end(),
+                        bExtraConstraints.begin(), bExtraConstraints.end(),
+                        std::inserter(commonExtraConstraints, commonExtraConstraints.begin()));
+  std::set_difference(aExtraConstraints.begin(), aExtraConstraints.end(),
+                      commonExtraConstraints.begin(), commonExtraConstraints.end(),
+                      std::inserter(aExtraSuffix, aExtraSuffix.end()));
+  std::set_difference(bExtraConstraints.begin(), bExtraConstraints.end(),
+                      commonExtraConstraints.begin(), commonExtraConstraints.end(),
+                      std::inserter(bExtraSuffix, bExtraSuffix.end()));
+
   if (DebugLogStateMerge) {
     llvm::errs() << "\tconstraint prefix: [";
     for (std::set<ref<Expr> >::iterator it = commonConstraints.begin(),
@@ -250,11 +265,30 @@ bool ExecutionState::merge(const ExecutionState &b) {
          it != ie; ++it)
       llvm::errs() << *it << ", ";
     llvm::errs() << "]\n";
+
+    llvm::errs() << "\textraConstraint prefix: [";
+    for (std::set<ref<Expr> >::iterator it = commonExtraConstraints.begin(),
+                                        ie = commonExtraConstraints.end();
+         it != ie; ++it)
+      llvm::errs() << *it << ", ";
+    llvm::errs() << "]\n";
+    llvm::errs() << "\tA extraSuffix: [";
+    for (std::set<ref<Expr> >::iterator it = aExtraSuffix.begin(),
+                                        ie = aExtraSuffix.end();
+         it != ie; ++it)
+      llvm::errs() << *it << ", ";
+    llvm::errs() << "]\n";
+    llvm::errs() << "\tB extraSuffix: [";
+    for (std::set<ref<Expr> >::iterator it = bExtraSuffix.begin(),
+                                        ie = bExtraSuffix.end();
+         it != ie; ++it)
+      llvm::errs() << *it << ", ";
+    llvm::errs() << "]\n";
   }
 
   // We cannot merge if addresses would resolve differently in the
   // states. This means:
-  // 
+  //
   // 1. Any objects created since the branch in either object must
   // have been free'd.
   //
@@ -294,17 +328,26 @@ bool ExecutionState::merge(const ExecutionState &b) {
       llvm::errs() << "\t\tmappings differ\n";
     return false;
   }
-  
+
   // merge stack
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
   ref<Expr> inB = ConstantExpr::alloc(1, Expr::Bool);
-  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
+  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(),
          ie = aSuffix.end(); it != ie; ++it)
     inA = AndExpr::create(inA, *it);
-  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
+  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(),
          ie = bSuffix.end(); it != ie; ++it)
     inB = AndExpr::create(inB, *it);
+
+  ref<Expr> inExtraA = ConstantExpr::alloc(1, Expr::Bool);
+  ref<Expr> inExtraB = ConstantExpr::alloc(1, Expr::Bool);
+  for (std::set< ref<Expr> >::iterator it = aExtraSuffix.begin(),
+         ie = aExtraSuffix.end(); it != ie; ++it)
+    inExtraA = AndExpr::create(inExtraA, *it);
+  for (std::set< ref<Expr> >::iterator it = bExtraSuffix.begin(),
+         ie = bExtraSuffix.end(); it != ie; ++it)
+    inExtraB = AndExpr::create(inExtraB, *it);
 
   // XXX should we have a preference as to which predicate to use?
   // it seems like it can make a difference, even though logically
@@ -345,10 +388,16 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   constraints = ConstraintManager();
-  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
+  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(),
          ie = commonConstraints.end(); it != ie; ++it)
     constraints.addConstraint(*it);
   constraints.addConstraint(OrExpr::create(inA, inB));
+
+  extraConstraints = ConstraintManager();
+  for (std::set< ref<Expr> >::iterator it = commonExtraConstraints.begin(),
+         ie = commonExtraConstraints.end(); it != ie; ++it)
+    extraConstraints.addConstraint(*it);
+  extraConstraints.addConstraint(OrExpr::create(inExtraA, inExtraB));
 
   return true;
 }
