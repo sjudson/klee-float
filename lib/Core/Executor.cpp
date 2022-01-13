@@ -1042,7 +1042,7 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition, bool ex
       klee_warning("seeds patched for violating constraint");
   }
 
-  state.addConstraint(condition);
+  state.addConstraint(condition, extra);
   if (ivcEnabled)
     doImpliedValueConcretization(state, condition,
                                ConstantExpr::alloc(1, Expr::Bool));
@@ -3680,17 +3680,6 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
     llvm::raw_string_ostream info(Str);
     ExprSMTLIBPrinter printer;
     printer.setOutput(info);
-
-    //ConstraintManager *combinedConstraints = new ConstraintManager();
-    //std::set< ref<Expr> > constraints(state.constraints.begin(), state.constraints.end());
-    //for (std::set< ref<Expr> >::iterator it = constraints.begin(),
-    //       ie = constraints.end(); it != ie; ++it)
-    //  combinedConstraints->addConstraint(*it);
-    //std::set< ref<Expr> > allConstraints(state.allConstraints.begin(), state.allConstraints.end());
-    //for (std::set< ref<Expr> >::iterator it = allConstraints.begin(),
-    //       ie = allConstraints.end(); it != ie; ++it)
-    //  combinedConstraints->addConstraint(*it);
-
     Query query(state.allConstraints, ConstantExpr::alloc(0, Expr::Bool));
     printer.setQuery(query);
     printer.generateOutput();
