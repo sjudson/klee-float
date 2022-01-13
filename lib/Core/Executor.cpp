@@ -3662,7 +3662,7 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
 
   switch (logFormat) {
   case STP: {
-    Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
+    Query query(state.allConstraints, ConstantExpr::alloc(0, Expr::Bool));
     char *log = solver->getConstraintLog(query);
     res = std::string(log);
     free(log);
@@ -3671,7 +3671,7 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
   case KQUERY: {
     std::string Str;
     llvm::raw_string_ostream info(Str);
-    ExprPPrinter::printConstraints(info, state.constraints);
+    ExprPPrinter::printConstraints(info, state.allConstraints);
     res = info.str();
   } break;
 
@@ -3681,19 +3681,17 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
     ExprSMTLIBPrinter printer;
     printer.setOutput(info);
 
-    ConstraintManager *combinedConstraints = new ConstraintManager();
+    //ConstraintManager *combinedConstraints = new ConstraintManager();
+    //std::set< ref<Expr> > constraints(state.constraints.begin(), state.constraints.end());
+    //for (std::set< ref<Expr> >::iterator it = constraints.begin(),
+    //       ie = constraints.end(); it != ie; ++it)
+    //  combinedConstraints->addConstraint(*it);
+    //std::set< ref<Expr> > allConstraints(state.allConstraints.begin(), state.allConstraints.end());
+    //for (std::set< ref<Expr> >::iterator it = allConstraints.begin(),
+    //       ie = allConstraints.end(); it != ie; ++it)
+    //  combinedConstraints->addConstraint(*it);
 
-    std::set< ref<Expr> > constraints(state.constraints.begin(), state.constraints.end());
-    for (std::set< ref<Expr> >::iterator it = constraints.begin(),
-           ie = constraints.end(); it != ie; ++it)
-      combinedConstraints->addConstraint(*it);
-
-    std::set< ref<Expr> > extraConstraints(state.extraConstraints.begin(), state.extraConstraints.end());
-    for (std::set< ref<Expr> >::iterator it = extraConstraints.begin(),
-           ie = extraConstraints.end(); it != ie; ++it)
-      combinedConstraints->addConstraint(*it);
-
-    Query query(*combinedConstraints, ConstantExpr::alloc(0, Expr::Bool));
+    Query query(state.allConstraints, ConstantExpr::alloc(0, Expr::Bool));
     printer.setQuery(query);
     printer.generateOutput();
     res = info.str();

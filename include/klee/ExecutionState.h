@@ -98,8 +98,8 @@ public:
   /// @brief Constraints collected so far
   ConstraintManager constraints;
 
-  /// @brief Constraints collected so far that pertain to path conditions with unique solutions
-  ConstraintManager extraConstraints;
+  /// @brief Constraints collected so far including those with unique solutions
+  ConstraintManager allConstraints;
 
   /// Statistics and information
 
@@ -179,7 +179,7 @@ public:
   void popFrame();
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
-  void addConstraint(ref<Expr> e, bool extra = false) { (!extra) ? constraints.addConstraint(e) : extraConstraints.addConstraint(e); }
+  void addConstraint(ref<Expr> e, bool extra = false) { allConstraints.addConstraint(e); if (!extra) constraints.addConstraint(e); }
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
