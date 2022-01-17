@@ -110,6 +110,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
 
     addressSpace(state.addressSpace),
     constraints(state.constraints),
+    allConstraints(state.allConstraints),
     uniqueID(globalExecutionStateCounter++), // FIXME: Not thread safe
     queryCost(state.queryCost),
     weight(state.weight),
