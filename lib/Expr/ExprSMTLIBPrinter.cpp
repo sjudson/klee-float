@@ -168,7 +168,7 @@ void ExprSMTLIBPrinter::setQuery(const Query &q) {
   *p << "(set-logic ALL)\n";
   *p << Z3_solver_to_string(builder->ctx, theSolver);
   *p << "(check-sat)\n";
-  *p << "(reset)\n";
+  *p << "(exit)\n";
 
   //query = &q;
   reset(); // clear the data structures
